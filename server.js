@@ -4,7 +4,8 @@ const path = require('path');
 const bodyParser = require('body-parser'); 
 const app = express();
 const port = 80;
-const replica_ip = '34.60.40.213:80';
+
+const replica_ip = '34.66.10.116:80';
 
 
 // Create a MariaDB connection pool
@@ -21,11 +22,13 @@ connectionLimit: 5
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 // Use body-parser middleware to parse form data (if you prefer explicit usage)
-app.use(bodyParser.json())
-app.use (bodyParser.urlencoded ({ extended: true }));
+ app.use(bodyParser.json())
+ app.use (bodyParser.urlencoded ({ extended: true }));
 
-//exposed endpoint, /greeting. When a GET request is made to that endpoint, the server should respond with a webpage featuring the text, “Hello World!”.
+//exposed endpoint, /greeting. When a GET request is made to that endpoint, the server should respond with a webpage featuring the text, “He>
 app.get('/greeting', (req, res) => {
+    console.log('Received request to greet');
+
     res.send('<h1>Hello World!</h1>');
 });
 
@@ -37,62 +40,70 @@ app.get('/greeting', (req, res) => {
 
 app.post('/register', async (req, res) => {
     const { username } = req.body;
-    //const username = req.body.username;
-    let conn;
-    try {
-        if (username === undefined || username === '') {
-            return res.status(400).send('Username is required');
+    //    const username = req.body.username;
+         console.log('Received request to reg');
+    console.log(req.body);
+    console.log(username);
+    if (username === undefined || username === '') {
+    console.log("empty")
+    return res.status(200).send('Username is required');
+            }
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            await conn.query('INSERT INTO Users (username) VALUES (?)', [username]);
+    console.log('inserted');
+            // Finally, set up a second cloud instance with the same endpoints, and a replica of the database you created in step II. 
+    //Users registered in either instance should appear in the other's response when a request to /list is made. Pursue a WRITE ALL data replication strategy, as depicted in the slides, to establish consistency.
+            // call the replica instance's /register endpoint
+            await fetch(`http://${replica_ip}/register`, { method: 'POST', body: JSON.stringify({ username }), headers: { 'Content-Type': 'application/json' } });
+    console.log('replicated');
+            res.status(200).send('User registered');
+        } catch (err) {
+            res.status(500).json({ error: 'Error registering user: ${err}' });
+    console.error('Error reg users:', err);
+        } finally {
+            if (conn) conn.release();
         }
-        conn = await pool.getConnection();
-        await conn.query('INSERT INTO Users (username) VALUES (?)', [username]);
-
-        // Finally, set up a second cloud instance with the same endpoints, and a replica of the database you created in step II. Users registered in either instance should appear in the other's response when a request to /list is made. Pursue a WRITE ALL data replication strategy, as depicted in the slides, to establish consistency.
-        // call the replica instance's /register endpoint
-        await fetch(`http://${replica_ip}/register`, { method: 'POST', body: JSON.stringify({ username }), headers: { 'Content-Type': 'application/json' } });
-
-        res.status(200).send('User registered successfully');
-    } catch (err) {
-        res.status(500).json({ error: 'Error registering user: ${err}' });
-    } finally {
-        if (conn) conn.release();
     }
-}
-);
-app.get('/list', async (req, res) => {
-    let conn;
-    try {
-        console.log('Received request to clear users');
-        conn = await pool.getConnection();
-        const rows = await conn.query('SELECT username FROM Users');
-        // output for example {"users" : ["Aman", "Abdu"] }
-        const users = rows.map(row => row.username);
-        res.json({ users });
-    } catch (err) {
-        console.error('Error retrieving users:', err);
-        res.status(500).json({ error: 'Error retrieving users: ${err}' });
-    } finally {
-        if (conn) conn.release();
+    );
+    app.get('/list', async (req, res) => {
+        let conn;
+        try {
+            conn = await pool.getConnection();
+            const rows = await conn.query('SELECT username FROM Users');
+            // output for example {"users" : ["Aman", "Abdu"] }
+            const users = rows.map(row => row.username);
+            res.json({ users });
+        } catch (err) {
+            res.status(500).json({ error: 'Error retrieving users: ${err}' });
+        } finally {
+            if (conn) conn.release();
+        }
     }
-}
-);
-app.post('/clear', async (req, res) => {
-    let conn;
-    try {
-        conn = await pool.getConnection();
-        await conn.query('DELETE FROM Users');
-        res.status(200).send('All users cleared');
+    );
+        app.post('/clear', async (req, res) => {
+            let conn;
+            console.log('Received request to clear users');
         
-    } catch (err) {
-        res.status(500).json({ error: 'Error clearing users: ${err}' });
-    } finally {
-        if (conn) conn.release();
-    }
-});
-// Alternatively, you can use Express's built-in parsing:
-//app.use (express.urlencoded({ extended: true }));
-// Route: Display form and customer table
-// app.get('/', async (req, res) => {
-// let conn;
+         try {
+                conn = await pool.getConnection();
+                await conn.query('DELETE FROM Users');
+                console.log('done');
+                res.status(200).send('users cleared');
+        
+            } catch (err) {
+                console.error('Error retrieving users:', err);
+                res.status(500).json({ error: 'Error clearing users: ${err}' });
+            } finally {
+                if (conn) conn.release();
+            }
+        });
+        // Alternatively, you can use Express's built-in parsing:
+        //app.use (express.urlencoded({ extended: true }));
+        // Route: Display form and customer table
+        // app.get('/', async (req, res) => {
+            // let conn;
 // try {
 // conn = await pool.getConnection();
 // // Get all customers from the table
@@ -122,5 +133,5 @@ app.post('/clear', async (req, res) => {
 // }
 // });
 app.listen(port, () => {
-    console.log(`Server is running on http://34.66.10.116:${port}`);
+    console.log(`Server is running on http://34.60.40.213:${port}`);
    });
