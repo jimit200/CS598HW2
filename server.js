@@ -21,7 +21,8 @@ connectionLimit: 5
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 // Use body-parser middleware to parse form data (if you prefer explicit usage)
- app.use (bodyParser.urlencoded ({ extended: true }));
+app.use(bodyParser.json())
+app.use (bodyParser.urlencoded ({ extended: true }));
 
 //exposed endpoint, /greeting. When a GET request is made to that endpoint, the server should respond with a webpage featuring the text, “Hello World!”.
 app.get('/greeting', (req, res) => {
@@ -35,9 +36,13 @@ app.get('/greeting', (req, res) => {
 // Finally, add another endpoint, /clear, which removes all users from your database upon receiving a POST request.
 
 app.post('/register', async (req, res) => {
-    const username = req.body.username;
+    const { username } = req.body;
+    //const username = req.body.username;
     let conn;
     try {
+        if (username === undefined || username === '') {
+            return res.status(400).send('Username is required');
+        }
         conn = await pool.getConnection();
         await conn.query('INSERT INTO Users (username) VALUES (?)', [username]);
 
@@ -45,7 +50,7 @@ app.post('/register', async (req, res) => {
         // call the replica instance's /register endpoint
         await fetch(`http://${replica_ip}/register`, { method: 'POST', body: JSON.stringify({ username }), headers: { 'Content-Type': 'application/json' } });
 
-        res.redirect('/');
+        res.status(200).send('User registered successfully');
     } catch (err) {
         res.status(500).json({ error: 'Error registering user: ${err}' });
     } finally {
@@ -56,24 +61,26 @@ app.post('/register', async (req, res) => {
 app.get('/list', async (req, res) => {
     let conn;
     try {
+        console.log('Received request to clear users');
         conn = await pool.getConnection();
         const rows = await conn.query('SELECT username FROM Users');
         // output for example {"users" : ["Aman", "Abdu"] }
         const users = rows.map(row => row.username);
         res.json({ users });
     } catch (err) {
+        console.error('Error retrieving users:', err);
         res.status(500).json({ error: 'Error retrieving users: ${err}' });
     } finally {
         if (conn) conn.release();
     }
 }
-)
+);
 app.post('/clear', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
         await conn.query('DELETE FROM Users');
-        res.redirect('/');
+        res.status(200).send('All users cleared');
         
     } catch (err) {
         res.status(500).json({ error: 'Error clearing users: ${err}' });
